@@ -92,9 +92,11 @@
         </a-cursor>
       </a-camera>
 
-      <!-- Right controller — teleport -->
+      <!-- Right controller — teleport
+           oculus-touch-controls is built into A-Frame, no external
+           model fetch needed, so it works reliably on Quest.        -->
       <a-entity id="right-hand"
-        hand-controls="hand: right; handModelStyle: lowPoly; color: #cccccc"
+        oculus-touch-controls="hand: right"
         teleport-controls="
           cameraRig: #player;
           teleportOrigin: #head;
@@ -109,11 +111,11 @@
           curveMissColor: #ff4444">
       </a-entity>
 
-      <!-- Left controller — laser pointer -->
+      <!-- Left controller — laser pointer for cube interaction -->
       <a-entity id="left-hand"
-        hand-controls="hand: left; handModelStyle: lowPoly; color: #cccccc"
+        oculus-touch-controls="hand: left"
         laser-controls="hand: left"
-        raycaster="objects: .clickable; far: 20; showLine: true; lineColor: white; lineOpacity: 0.4">
+        raycaster="objects: .clickable; far: 20; showLine: true; lineColor: white; lineOpacity: 0.5">
       </a-entity>
 
     </a-entity>
