@@ -2,78 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VR Explorer — Oculus</title>
+  <title>VR Explorer — A-Frame</title>
+
+  <!-- A-Frame 1.3.0 — last version before Three.js BufferGeometry API break -->
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+
+  <!-- Teleport controls built against A-Frame 1.3.x Three.js internals -->
+  <script src="https://cdn.jsdelivr.net/gh/fernandojsg/aframe-teleport-controls@5ad4cdf/dist/aframe-teleport-controls.min.js"></script>
+
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; overflow: hidden; font-family: system-ui, sans-serif; }
-    canvas { display: block; }
-
-    #crosshair {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 16px; height: 16px;
-      pointer-events: none; opacity: 0.7;
-    }
-    #crosshair::before, #crosshair::after {
-      content: ''; position: absolute;
-      background: rgba(255,255,255,0.8); border-radius: 2px;
-    }
-    #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
-    #crosshair::after  { width: 100%; height: 2px; top: 50%; transform: translateY(-50%); }
-    #crosshair.hover::before, #crosshair.hover::after { background: #3ecfcf; }
-
-    #overlay {
-      position: fixed; inset: 0;
+    #ui {
+      position: fixed; inset: 0; z-index: 999;
       background: rgba(0,0,0,0.88);
       display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 14px;
-      transition: opacity 0.4s; z-index: 10;
+      align-items: center; justify-content: center; gap: 16px;
+      font-family: system-ui, sans-serif; color: #fff;
+      transition: opacity 0.4s;
     }
-    #overlay.hidden { opacity: 0; pointer-events: none; }
-    #overlay h1 { font-size: 26px; font-weight: 600; color: #fff; }
-    #overlay p  { font-size: 13px; color: rgba(255,255,255,0.45); text-align: center; line-height: 1.8; max-width: 360px; }
-    .btn {
+    #ui.hidden { opacity: 0; pointer-events: none; }
+    #ui h1 { font-size: 26px; font-weight: 600; }
+    #ui p  { font-size: 13px; color: rgba(255,255,255,0.5); text-align: center; line-height: 1.9; max-width: 400px; }
+    #enter-btn {
       padding: 12px 36px; border-radius: 999px; border: none;
-      font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+      background: linear-gradient(135deg, #6c47ff, #3ecfcf);
+      color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
     }
-    #enter-desktop { background: rgba(255,255,255,0.12); color: #fff; }
-    #enter-desktop:hover { opacity: 0.75; }
-    #enter-vr { background: linear-gradient(135deg, #6c47ff, #3ecfcf); color: #fff; display: none; }
-    #enter-vr:hover { opacity: 0.85; }
-    #vr-status { font-size: 12px; color: rgba(255,255,255,0.3); }
-
-    #controls-hint {
-      position: fixed; bottom: 20px; left: 50%;
-      transform: translateX(-50%);
-      display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
-      pointer-events: none; opacity: 0; transition: opacity 0.5s; max-width: 600px;
+    #enter-btn:hover { opacity: 0.85; }
+    #server-note {
+      font-size: 11px; color: rgba(255,180,0,0.7);
+      border: 1px solid rgba(255,180,0,0.3); border-radius: 8px;
+      padding: 8px 16px; max-width: 380px; text-align: center; line-height: 1.6;
     }
-    #controls-hint.visible { opacity: 1; }
-    .key {
-      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 6px; padding: 4px 10px; font-size: 11px; color: rgba(255,255,255,0.5);
-    }
-    #esc-hint {
-      position: fixed; top: 16px; right: 20px; font-size: 12px;
-      color: rgba(255,255,255,0.25); pointer-events: none; opacity: 0; transition: opacity 0.5s;
-    }
-    #esc-hint.visible { opacity: 1; }
-    #tooltip {
-      position: fixed; top: calc(50% + 20px); left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 8px; padding: 5px 14px; font-size: 12px; color: rgba(255,255,255,0.8);
-      pointer-events: none; opacity: 0; transition: opacity 0.2s; white-space: nowrap;
-    }
-    #tooltip.visible { opacity: 1; }
     #popup {
       position: fixed; top: 50%; left: 50%;
       transform: translate(-50%, -50%) scale(0.92);
       background: rgba(10,6,20,0.96); border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 16px; padding: 26px 34px; text-align: center; color: #fff;
-      pointer-events: none; opacity: 0; transition: opacity 0.25s, transform 0.25s;
-      z-index: 20; max-width: 300px;
+      border-radius: 16px; padding: 28px 36px; text-align: center;
+      color: #fff; pointer-events: none; opacity: 0; z-index: 998;
+      transition: opacity 0.25s, transform 0.25s; max-width: 300px;
+      font-family: system-ui, sans-serif;
     }
     #popup.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
     #popup h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
@@ -82,451 +49,264 @@
       padding: 7px 22px; border-radius: 999px; border: none;
       background: rgba(255,255,255,0.1); color: #fff; font-size: 13px; cursor: pointer;
     }
-    #popup-close:hover { background: rgba(255,255,255,0.2); }
   </style>
 </head>
 <body>
 
-  <div id="overlay">
+  <div id="ui">
     <h1>VR Explorer</h1>
     <p>
-      <strong style="color:#fff">On Oculus Quest:</strong> tap Enter VR, then<br>
-      <strong style="color:#3ecfcf">Hold RIGHT trigger</strong> to aim teleport arc →
-      <strong style="color:#3ecfcf">release</strong> to jump.<br>
-      <strong style="color:#ffb347">Left trigger</strong> to inspect cubes.<br><br>
-      <strong style="color:#fff">On desktop:</strong> WASD + mouse, click to inspect.
+      <strong style="color:#fff">On Oculus Quest:</strong> tap the VR button (bottom-right).<br>
+      <strong style="color:#3ecfcf">Right trigger</strong> — hold to aim teleport arc, release to jump.<br>
+      <strong style="color:#ffb347">Left trigger</strong> — point at a cube to read its lore.<br><br>
+      <strong style="color:#fff">On desktop:</strong> WASD + mouse drag · click a cube to inspect.
     </p>
-    <button id="enter-vr" class="btn">🥽 Enter VR</button>
-    <button id="enter-desktop" class="btn">Enter (Desktop)</button>
-    <p id="vr-status">Checking VR support…</p>
+    <button id="enter-btn">Enter (Desktop)</button>
+    <p id="server-note">
+      ⚠️ Must be served via HTTP, not opened as a file.<br>
+      Run <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px">npx serve .</code> in this folder, then open <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px">localhost:3000</code>
+    </p>
   </div>
 
-  <div id="crosshair"></div>
-  <div id="controls-hint">
-    <span class="key">W/↑ Forward</span>
-    <span class="key">S/↓ Back</span>
-    <span class="key">A/← Left</span>
-    <span class="key">D/→ Right</span>
-    <span class="key">Mouse look</span>
-    <span class="key">Click interact</span>
-  </div>
-  <div id="esc-hint">ESC to release mouse</div>
-  <div id="tooltip"></div>
   <div id="popup">
     <h2 id="popup-title"></h2>
     <p id="popup-body"></p>
     <button id="popup-close">Close</button>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <a-scene
+    background="color: #0a0614"
+    fog="type: exponential; color: #0a0614; density: 0.05"
+    renderer="antialias: true; colorManagement: true"
+    vr-mode-ui="enabled: true">
+
+    <!-- ── Player rig ─────────────────────────────────────────────── -->
+    <a-entity id="player" position="0 0 0">
+
+      <a-camera id="head"
+        position="0 1.7 0"
+        wasd-controls="acceleration: 20"
+        look-controls="pointerLockEnabled: true">
+        <a-cursor color="#3ecfcf" opacity="0.6"
+          raycaster="objects: .clickable; far: 20">
+        </a-cursor>
+      </a-camera>
+
+      <!-- Right controller — teleport -->
+      <a-entity id="right-hand"
+        hand-controls="hand: right; handModelStyle: lowPoly; color: #cccccc"
+        teleport-controls="
+          cameraRig: #player;
+          teleportOrigin: #head;
+          button: trigger;
+          type: parabolic;
+          curveShootingSpeed: 10;
+          curveNumberPoints: 30;
+          collisionEntities: #floor;
+          hitCylinderColor: #3ecfcf;
+          hitCylinderRadius: 0.3;
+          curveHitColor: #3ecfcf;
+          curveMissColor: #ff4444">
+      </a-entity>
+
+      <!-- Left controller — laser pointer -->
+      <a-entity id="left-hand"
+        hand-controls="hand: left; handModelStyle: lowPoly; color: #cccccc"
+        laser-controls="hand: left"
+        raycaster="objects: .clickable; far: 20; showLine: true; lineColor: white; lineOpacity: 0.4">
+      </a-entity>
+
+    </a-entity>
+
+    <!-- ── Floor ──────────────────────────────────────────────────── -->
+    <a-plane id="floor"
+      rotation="-90 0 0" width="60" height="60"
+      color="#0d0820" roughness="0.9"
+      shadow="receive: true">
+    </a-plane>
+
+    <!-- Grid overlay — wireframe plane, A-Frame native way -->
+    <a-plane
+      rotation="-90 0 0" width="60" height="60"
+      position="0 0.003 0"
+      segments-width="40" segments-height="40"
+      material="color: #3a2a6a; wireframe: true; opacity: 0.3; transparent: true">
+    </a-plane>
+
+    <!-- ── Pillars ────────────────────────────────────────────────── -->
+    <a-cylinder position="-3 2 -4"  radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="-3 2 -8"  radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="-3 2 -12" radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="-3 2 -16" radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="-3 2 -20" radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="3 2 -4"   radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="3 2 -8"   radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="3 2 -12"  radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="3 2 -16"  radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+    <a-cylinder position="3 2 -20"  radius-top="0.15" radius-bottom="0.18" height="4" segments-radial="8" color="#1a0a3a" metalness="0.4" roughness="0.6"></a-cylinder>
+
+    <a-box position="-3 4.1 -4"  width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="-3 4.1 -8"  width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="-3 4.1 -12" width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="-3 4.1 -16" width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="-3 4.1 -20" width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="3 4.1 -4"   width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="3 4.1 -8"   width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="3 4.1 -12"  width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="3 4.1 -16"  width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+    <a-box position="3 4.1 -20"  width="0.5" height="0.2" depth="0.5" color="#2a1a5a"></a-box>
+
+    <!-- ── Clickable cubes ────────────────────────────────────────── -->
+    <!-- NOTE: emissive and emissive-intensity are standalone attributes
+         in A-Frame 1.3, NOT inside material=""                       -->
+
+    <a-box class="clickable" id="cube-purple"
+      position="0 1.5 -6" width="0.4" height="0.4" depth="0.4"
+      color="#6c47ff" roughness="0.2" metalness="0.8"
+      emissive="#6c47ff" emissive-intensity="0.3"
+      animation__spin="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear"
+      animation__float="property: position; from: 0 1.4 -6; to: 0 1.6 -6; dir: alternate; loop: true; dur: 2000; easing: easeInOutSine"
+      data-title="The Purple Gate"
+      data-body="Ancient energies swirl within. This cube has guarded the corridor entrance since the beginning of time.">
+    </a-box>
+
+    <a-box class="clickable" id="cube-teal"
+      position="-2 2.2 -10" width="0.3" height="0.3" depth="0.3"
+      color="#3ecfcf" roughness="0.2" metalness="0.8"
+      emissive="#3ecfcf" emissive-intensity="0.3"
+      animation__spin="property: rotation; to: 360 0 360; loop: true; dur: 6000; easing: linear"
+      animation__float="property: position; from: -2 2.1 -10; to: -2 2.3 -10; dir: alternate; loop: true; dur: 2200; easing: easeInOutSine"
+      data-title="The Teal Fragment"
+      data-body="A shard of a shattered world. If you listen closely, you can hear the ocean inside it.">
+    </a-box>
+
+    <a-box class="clickable" id="cube-pink"
+      position="2.5 1.8 -8" width="0.25" height="0.25" depth="0.25"
+      color="#ff4785" roughness="0.2" metalness="0.8"
+      emissive="#ff4785" emissive-intensity="0.3"
+      animation__spin="property: rotation; to: 0 -360 0; loop: true; dur: 4000; easing: linear"
+      animation__float="property: position; from: 2.5 1.7 -8; to: 2.5 1.9 -8; dir: alternate; loop: true; dur: 1800; easing: easeInOutSine"
+      data-title="The Pink Ember"
+      data-body="Warm to the touch, even through the void. Rumored to be the last light of a dead star.">
+    </a-box>
+
+    <a-box class="clickable" id="cube-gold"
+      position="0 3 -14" width="0.5" height="0.5" depth="0.5"
+      color="#ffb347" roughness="0.2" metalness="0.8"
+      emissive="#ffb347" emissive-intensity="0.3"
+      animation__spin="property: rotation; to: 360 360 0; loop: true; dur: 7000; easing: linear"
+      animation__float="property: position; from: 0 2.9 -14; to: 0 3.1 -14; dir: alternate; loop: true; dur: 2500; easing: easeInOutSine"
+      data-title="The Golden Monolith"
+      data-body="The largest of the relics. No one knows who placed it here, or why it hums at exactly 432Hz.">
+    </a-box>
+
+    <!-- ── Orbs ───────────────────────────────────────────────────── -->
+    <a-sphere position="-4 1.5 -6"  radius="0.12" color="#6c47ff" emissive="#6c47ff" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="-4 1.5 -6"  type="point" color="#6c47ff" intensity="2.5" distance="6"></a-light>
+
+    <a-sphere position="5 2 -8"     radius="0.12" color="#3ecfcf" emissive="#3ecfcf" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="5 2 -8"     type="point" color="#3ecfcf" intensity="2.5" distance="6"></a-light>
+
+    <a-sphere position="-7 1 -3"    radius="0.12" color="#ff4785" emissive="#ff4785" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="-7 1 -3"    type="point" color="#ff4785" intensity="2.5" distance="6"></a-light>
+
+    <a-sphere position="3 1.8 -4"   radius="0.12" color="#ffb347" emissive="#ffb347" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="3 1.8 -4"   type="point" color="#ffb347" intensity="2.5" distance="6"></a-light>
+
+    <a-sphere position="0 2.5 -10"  radius="0.12" color="#6c47ff" emissive="#6c47ff" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="0 2.5 -10"  type="point" color="#6c47ff" intensity="2.5" distance="6"></a-light>
+
+    <a-sphere position="-2 1.2 -12" radius="0.12" color="#3ecfcf" emissive="#3ecfcf" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="-2 1.2 -12" type="point" color="#3ecfcf" intensity="2.5" distance="6"></a-light>
+
+    <a-sphere position="8 1.5 -7"   radius="0.12" color="#ff4785" emissive="#ff4785" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="8 1.5 -7"   type="point" color="#ff4785" intensity="2.5" distance="6"></a-light>
+
+    <a-sphere position="-5 2 -14"   radius="0.12" color="#ffb347" emissive="#ffb347" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="-5 2 -14"   type="point" color="#ffb347" intensity="2.5" distance="6"></a-light>
+
+    <a-sphere position="2 1 -16"    radius="0.12" color="#6c47ff" emissive="#6c47ff" emissive-intensity="2" material="shader: flat"></a-sphere>
+    <a-light  position="2 1 -16"    type="point" color="#6c47ff" intensity="2.5" distance="6"></a-light>
+
+    <!-- ── Lighting ───────────────────────────────────────────────── -->
+    <a-light type="ambient"     color="#1a0a2e" intensity="3"></a-light>
+    <a-light type="directional" color="#7090ff" intensity="0.6" position="10 20 10" cast-shadow="true"></a-light>
+
+    <!-- ── Sky ───────────────────────────────────────────────────── -->
+    <a-sky color="#0a0614"></a-sky>
+
+  </a-scene>
+
   <script>
-
-    // ── Renderer ──────────────────────────────────────────────────────────────
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;
-    renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
-
-    // ── Scene ─────────────────────────────────────────────────────────────────
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0614);
-    scene.fog = new THREE.FogExp2(0x0a0614, 0.06);
-
-    // ── Player rig ────────────────────────────────────────────────────────────
-    // Everything the player "owns" lives inside this Group.
-    // Moving playerRig = teleporting the player.
-    const playerRig = new THREE.Group();
-    scene.add(playerRig);
-
-    // Desktop camera sub-rig (ignored in VR — XR takes over)
-    const yawObject   = new THREE.Object3D();
-    const pitchObject = new THREE.Object3D();
-    yawObject.position.set(0, 1.7, 0);
-    playerRig.add(yawObject);
-    yawObject.add(pitchObject);
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 100);
-    pitchObject.add(camera);
-
-    // ── Lighting ──────────────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0x1a0a2e, 3));
-    const moonLight = new THREE.DirectionalLight(0x7090ff, 0.6);
-    moonLight.position.set(10, 20, 10);
-    moonLight.castShadow = true;
-    moonLight.shadow.mapSize.set(2048, 2048);
-    moonLight.shadow.camera.left = moonLight.shadow.camera.bottom = -25;
-    moonLight.shadow.camera.right = moonLight.shadow.camera.top = 25;
-    moonLight.shadow.camera.far = 60;
-    scene.add(moonLight);
-
-    // ── Orbs ──────────────────────────────────────────────────────────────────
-    const orbColors = [0x6c47ff, 0x3ecfcf, 0xff4785, 0xffb347];
-    [[-4,1.5,-6],[5,2,-8],[-7,1,-3],[3,1.8,-4],
-     [0,2.5,-10],[-2,1.2,-12],[8,1.5,-7],[-5,2,-14],[2,1,-16]
-    ].forEach(([x,y,z], i) => {
-      const color = orbColors[i % 4];
-      const light = new THREE.PointLight(color, 2.5, 6);
-      light.position.set(x,y,z); scene.add(light);
-      const orb = new THREE.Mesh(
-        new THREE.SphereGeometry(0.12, 16, 16),
-        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2, roughness: 0 })
-      );
-      orb.position.set(x,y,z);
-      orb.userData = { light, baseY: y, phase: Math.random()*Math.PI*2 };
-      scene.add(orb);
-      scene.userData.orbs = scene.userData.orbs || [];
-      scene.userData.orbs.push(orb);
+    // Hide overlay on Enter or VR entry
+    document.getElementById('enter-btn').addEventListener('click', () => {
+      document.getElementById('ui').classList.add('hidden');
+    });
+    document.querySelector('a-scene').addEventListener('enter-vr', () => {
+      document.getElementById('ui').classList.add('hidden');
     });
 
-    // ── Floor ─────────────────────────────────────────────────────────────────
-    const floorMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(60, 60),
-      new THREE.MeshStandardMaterial({ color: 0x0d0820, roughness: 0.9 })
-    );
-    floorMesh.rotation.x = -Math.PI / 2;
-    floorMesh.receiveShadow = true;
-    scene.add(floorMesh);
-    const gridHelper = new THREE.GridHelper(60, 40, 0x2a1a4a, 0x1a0a2e);
-    gridHelper.position.y = 0.001;
-    scene.add(gridHelper);
+    // Cube hover + click
+    const popup      = document.getElementById('popup');
+    const popupTitle = document.getElementById('popup-title');
+    const popupBody  = document.getElementById('popup-body');
 
-    // ── Pillars ───────────────────────────────────────────────────────────────
-    function makePillar(x, z) {
-      const g = new THREE.Group();
-      const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.15, 0.18, 4, 8),
-        new THREE.MeshStandardMaterial({ color: 0x1a0a3a, roughness: 0.6, metalness: 0.4 })
-      );
-      shaft.position.y = 2; shaft.castShadow = true; g.add(shaft);
-      const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 0.2, 0.5),
-        new THREE.MeshStandardMaterial({ color: 0x2a1a5a, roughness: 0.4, metalness: 0.6 })
-      );
-      cap.position.y = 4.1; g.add(cap);
-      g.position.set(x,0,z); scene.add(g);
-    }
-    [-3,3].forEach(x => { for (let z=-4; z>=-22; z-=4) makePillar(x,z); });
+    document.querySelectorAll('.clickable').forEach(cube => {
 
-    // ── Clickable cubes ───────────────────────────────────────────────────────
-    const cubes = [];
-    const clickableMeshes = [];
-    [
-      { pos:[0,1.5,-6],   color:0x6c47ff, size:0.4,  title:'The Purple Gate',    body:'Ancient energies swirl within. This cube has guarded the corridor entrance since the beginning of time.' },
-      { pos:[-2,2.2,-10], color:0x3ecfcf, size:0.3,  title:'The Teal Fragment',  body:'A shard of a shattered world. If you listen closely, you can hear the ocean inside it.' },
-      { pos:[2.5,1.8,-8], color:0xff4785, size:0.25, title:'The Pink Ember',     body:'Warm to the touch, even through the void. Rumored to be the last light of a dead star.' },
-      { pos:[0,3,-14],    color:0xffb347, size:0.5,  title:'The Golden Monolith',body:'The largest of the relics. No one knows who placed it here, or why it hums at exactly 432Hz.' },
-    ].forEach(({ pos, color, size, title, body }) => {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(size,size,size),
-        new THREE.MeshStandardMaterial({ color, roughness:0.2, metalness:0.8, emissive:color, emissiveIntensity:0.3 })
-      );
-      mesh.position.set(...pos); mesh.castShadow = true;
-      mesh.userData = { clickable:true, title, body };
-      mesh.add(new THREE.LineSegments(
-        new THREE.EdgesGeometry(new THREE.BoxGeometry(size,size,size)),
-        new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.25 })
-      ));
-      // 3D canvas label for VR
-      const c = document.createElement('canvas'); c.width=512; c.height=128;
-      const ctx = c.getContext('2d');
-      const hex = '#'+new THREE.Color(color).getHexString();
-      ctx.fillStyle='rgba(10,6,20,0.9)'; ctx.roundRect(4,4,504,120,16); ctx.fill();
-      ctx.strokeStyle=hex; ctx.lineWidth=3; ctx.roundRect(4,4,504,120,16); ctx.stroke();
-      ctx.fillStyle='#fff'; ctx.font='bold 38px system-ui';
-      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(title,256,64);
-      const label = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.9,0.22),
-        new THREE.MeshBasicMaterial({ map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false })
-      );
-      label.position.set(0, size/2+0.24, 0); label.visible=false;
-      mesh.add(label);
-      scene.add(mesh);
-      cubes.push({ mesh, baseY:pos[1], phase:Math.random()*Math.PI*2, label });
-      clickableMeshes.push(mesh);
-    });
-
-    // ── Stars ─────────────────────────────────────────────────────────────────
-    const sp=[];
-    for(let i=0;i<2000;i++){
-      const t=Math.random()*Math.PI*2,p=Math.acos(2*Math.random()-1),r=40+Math.random()*20;
-      sp.push(r*Math.sin(p)*Math.cos(t),r*Math.cos(p),r*Math.sin(p)*Math.sin(t));
-    }
-    const sg=new THREE.BufferGeometry();
-    sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
-    scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:0.15,sizeAttenuation:true})));
-
-    // ── Teleport arc ──────────────────────────────────────────────────────────
-    const ARC_N = 30;
-    const arcPos = new Float32Array(ARC_N * 3);
-    const arcGeo = new THREE.BufferGeometry();
-    arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPos, 3));
-    const arcMat = new THREE.LineBasicMaterial({ color:0x3ecfcf, transparent:true, opacity:0.75 });
-    const arcLine = new THREE.Line(arcGeo, arcMat);
-    arcLine.visible = false;
-    arcLine.frustumCulled = false;
-    scene.add(arcLine);
-
-    // Landing reticle
-    const reticle = new THREE.Mesh(
-      new THREE.RingGeometry(0.28, 0.36, 32),
-      new THREE.MeshBasicMaterial({ color:0x3ecfcf, side:THREE.DoubleSide, transparent:true, opacity:0.85 })
-    );
-    reticle.rotation.x = -Math.PI/2; reticle.position.y = 0.01; reticle.visible = false;
-    scene.add(reticle);
-    const reticleDot = new THREE.Mesh(
-      new THREE.CircleGeometry(0.08,16),
-      new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.9 })
-    );
-    reticleDot.rotation.x = -Math.PI/2; reticleDot.position.y = 0.02; reticleDot.visible = false;
-    scene.add(reticleDot);
-
-    let teleportTarget = null;
-    let teleportAiming = false;
-
-    function updateTeleportArc(ctrl) {
-      const origin = new THREE.Vector3();
-      ctrl.getWorldPosition(origin);
-      const dir = new THREE.Vector3(0,0,-1).applyQuaternion(ctrl.quaternion);
-
-      const speed = 8, gravity = 12;
-      let landed = false;
-      teleportTarget = null;
-
-      for (let i = 0; i < ARC_N; i++) {
-        const t = (i / (ARC_N-1)) * 1.6;
-        const x = origin.x + dir.x*speed*t;
-        const y = origin.y + dir.y*speed*t - 0.5*gravity*t*t;
-        const z = origin.z + dir.z*speed*t;
-        arcPos[i*3]=x; arcPos[i*3+1]=y; arcPos[i*3+2]=z;
-
-        if (!landed && i>0 && y <= 0.02) {
-          const pt = (i-1)/(ARC_N-1)*1.6;
-          const py = origin.y + dir.y*speed*pt - 0.5*gravity*pt*pt;
-          const alpha = py/(py - y + 0.0001);
-          const lt = pt + alpha*(t-pt);
-          const lx = Math.max(-11, Math.min(11, origin.x + dir.x*speed*lt));
-          const lz = Math.max(-23, Math.min(3,  origin.z + dir.z*speed*lt));
-          teleportTarget = new THREE.Vector3(lx, 0, lz);
-          for (let j=i; j<ARC_N; j++) { arcPos[j*3]=lx; arcPos[j*3+1]=0.02; arcPos[j*3+2]=lz; }
-          landed = true; break;
-        }
-      }
-
-      arcGeo.attributes.position.needsUpdate = true;
-      arcLine.visible = true;
-
-      if (teleportTarget) {
-        reticle.position.set(teleportTarget.x, 0.01, teleportTarget.z);
-        reticleDot.position.set(teleportTarget.x, 0.02, teleportTarget.z);
-        reticle.visible = true; reticleDot.visible = true;
-        arcMat.color.set(0x3ecfcf);
-      } else {
-        reticle.visible = false; reticleDot.visible = false;
-        arcMat.color.set(0xff4444);
-      }
-    }
-
-    function hideTeleportArc() {
-      arcLine.visible=false; reticle.visible=false; reticleDot.visible=false;
-      teleportTarget=null; teleportAiming=false;
-    }
-
-    function doTeleport() {
-      if (!teleportTarget) return;
-      // Offset playerRig so the headset lands at teleportTarget.
-      // We subtract the head's horizontal offset within the rig.
-      const xrCam = renderer.xr.getCamera(camera);
-      const head = new THREE.Vector3();
-      xrCam.getWorldPosition(head);
-      playerRig.position.x = teleportTarget.x - (head.x - playerRig.position.x);
-      playerRig.position.z = teleportTarget.z - (head.z - playerRig.position.z);
-    }
-
-    // ── VR Controllers ────────────────────────────────────────────────────────
-    // Controller 0 = right (teleport), Controller 1 = left (inspect)
-    const ctrl0 = renderer.xr.getController(0); // right
-    const ctrl1 = renderer.xr.getController(1); // left
-    playerRig.add(ctrl0);
-    playerRig.add(ctrl1);
-
-    // Thin laser line on each controller
-    [ctrl0, ctrl1].forEach(ctrl => {
-      const laser = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-3)]),
-        new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.35 })
-      );
-      ctrl.add(laser);
-    });
-
-    // Right trigger held = aim teleport
-    ctrl0.addEventListener('selectstart', () => { teleportAiming = true; });
-    ctrl0.addEventListener('selectend', () => {
-      if (teleportTarget) doTeleport();
-      hideTeleportArc();
-    });
-
-    // Left trigger = inspect cube or dismiss label
-    ctrl1.addEventListener('selectstart', () => {
-      const origin = new THREE.Vector3();
-      ctrl1.getWorldPosition(origin);
-      const dir = new THREE.Vector3(0,0,-1).applyQuaternion(ctrl1.quaternion);
-      const ray = new THREE.Raycaster();
-      ray.set(origin, dir);
-      const hits = ray.intersectObjects(clickableMeshes);
-      if (hits.length > 0) {
-        cubes.forEach(c => { c.label.visible = false; });
-        const hit = cubes.find(c => c.mesh === hits[0].object);
-        if (hit) hit.label.visible = true;
-      } else {
-        cubes.forEach(c => { c.label.visible = false; });
-      }
-    });
-
-    // ── VR session ────────────────────────────────────────────────────────────
-    let inVR = false;
-    renderer.xr.addEventListener('sessionstart', () => { inVR = true; });
-    renderer.xr.addEventListener('sessionend', () => { inVR = false; hideTeleportArc(); });
-
-    const vrStatus = document.getElementById('vr-status');
-    const enterVrBtn = document.getElementById('enter-vr');
-
-    if (navigator.xr) {
-      navigator.xr.isSessionSupported('immersive-vr').then(ok => {
-        if (ok) { enterVrBtn.style.display='block'; vrStatus.textContent='✓ Immersive VR supported'; }
-        else { vrStatus.textContent='Immersive VR not supported on this device'; }
+      cube.addEventListener('mouseenter', () => {
+        cube.setAttribute('emissive-intensity', 0.9);
+        cube.setAttribute('scale', '1.08 1.08 1.08');
       });
-    } else {
-      vrStatus.textContent = 'WebXR not available in this browser';
-    }
-
-    enterVrBtn.addEventListener('click', async () => {
-      const session = await navigator.xr.requestSession('immersive-vr', {
-        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
+      cube.addEventListener('mouseleave', () => {
+        cube.setAttribute('emissive-intensity', 0.3);
+        cube.setAttribute('scale', '1 1 1');
       });
-      renderer.xr.setReferenceSpaceType('local-floor');
-      await renderer.xr.setSession(session);
-      document.getElementById('overlay').classList.add('hidden');
-    });
 
-    // ── Desktop controls ──────────────────────────────────────────────────────
-    let locked=false, yaw=0, pitch=0;
-    document.addEventListener('pointerlockchange', () => {
-      locked = document.pointerLockElement === renderer.domElement;
-      document.getElementById('controls-hint').classList.toggle('visible', locked);
-      document.getElementById('esc-hint').classList.toggle('visible', locked);
-    });
-    document.addEventListener('mousemove', e => {
-      if (!locked||inVR) return;
-      yaw -= e.movementX*0.002; pitch -= e.movementY*0.002;
-      pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch));
-      yawObject.rotation.y=yaw; pitchObject.rotation.x=pitch;
-    });
-    document.getElementById('enter-desktop').addEventListener('click', () => {
-      renderer.domElement.requestPointerLock();
-      document.getElementById('overlay').classList.add('hidden');
-    });
+      cube.addEventListener('click', () => {
+        const title = cube.dataset.title;
+        const body  = cube.dataset.body;
+        const color = cube.getAttribute('color');
 
-    const raycaster=new THREE.Raycaster(), center=new THREE.Vector2(0,0);
-    const tooltip=document.getElementById('tooltip'), popup=document.getElementById('popup');
-    let hoveredMesh=null, popupOpen=false;
+        if (document.querySelector('a-scene').is('vr-mode')) {
+          // VR: floating 3D label above cube
+          document.querySelectorAll('.vr-label').forEach(l => l.parentNode.removeChild(l));
+          const label = document.createElement('a-entity');
+          label.classList.add('vr-label');
 
-    renderer.domElement.addEventListener('click', () => {
-      if (inVR) return;
-      if (!locked) { renderer.domElement.requestPointerLock(); return; }
-      if (popupOpen) return;
-      raycaster.setFromCamera(center, camera);
-      const hits = raycaster.intersectObjects(clickableMeshes);
-      if (hits.length>0) {
-        const obj=hits[0].object;
-        document.getElementById('popup-title').textContent = obj.userData.title;
-        document.getElementById('popup-body').textContent  = obj.userData.body;
-        popup.style.borderColor = '#'+new THREE.Color(obj.material.color).getHexString();
-        popup.classList.add('visible'); popupOpen=true; document.exitPointerLock();
-      }
-    });
-    document.getElementById('popup-close').addEventListener('click', () => {
-      popup.classList.remove('visible'); popupOpen=false;
-      renderer.domElement.requestPointerLock();
-    });
+          const bg = document.createElement('a-plane');
+          bg.setAttribute('width', '0.9');
+          bg.setAttribute('height', '0.22');
+          bg.setAttribute('color', '#0a0614');
+          bg.setAttribute('opacity', '0.85');
+          bg.setAttribute('position', '0 0 -0.002');
+          label.appendChild(bg);
 
-    const keys={};
-    window.addEventListener('keydown', e=>{ keys[e.code]=true; });
-    window.addEventListener('keyup',   e=>{ keys[e.code]=false; });
-    const moveDir=new THREE.Vector3(), fv=new THREE.Vector3(), rv=new THREE.Vector3();
-    function processDesktopMovement() {
-      if (inVR) return;
-      moveDir.set(0,0,0);
-      fv.set(-Math.sin(yaw),0,-Math.cos(yaw));
-      rv.set(Math.cos(yaw),0,-Math.sin(yaw));
-      if(keys['KeyW']||keys['ArrowUp'])    moveDir.addScaledVector(fv,  0.06);
-      if(keys['KeyS']||keys['ArrowDown'])  moveDir.addScaledVector(fv, -0.06);
-      if(keys['KeyA']||keys['ArrowLeft'])  moveDir.addScaledVector(rv, -0.06);
-      if(keys['KeyD']||keys['ArrowRight']) moveDir.addScaledVector(rv,  0.06);
-      playerRig.position.add(moveDir);
-      playerRig.position.x = Math.max(-12, Math.min(12, playerRig.position.x));
-      playerRig.position.z = Math.max(-24, Math.min(4,  playerRig.position.z));
-    }
+          const txt = document.createElement('a-text');
+          txt.setAttribute('value', title);
+          txt.setAttribute('align', 'center');
+          txt.setAttribute('color', color);
+          txt.setAttribute('width', '0.8');
+          label.appendChild(txt);
 
-    window.addEventListener('resize', () => {
-      camera.aspect=window.innerWidth/window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+          const cubeH = parseFloat(cube.getAttribute('height') || 0.4);
+          label.setAttribute('position', `0 ${cubeH / 2 + 0.2} 0`);
+          label.setAttribute('look-at', '#head');
+          cube.appendChild(label);
 
-    // ── Animation loop ────────────────────────────────────────────────────────
-    const clock = new THREE.Clock();
-    renderer.setAnimationLoop(() => {
-      const t = clock.getElapsedTime();
-
-      processDesktopMovement();
-
-      // Update teleport arc every frame while right trigger held
-      if (inVR && teleportAiming) updateTeleportArc(ctrl0);
-
-      // Keep VR labels facing the viewer
-      if (inVR) {
-        const xrCam = renderer.xr.getCamera(camera);
-        cubes.forEach(({ label, mesh }) => {
-          if (label.visible) label.lookAt(xrCam.position);
-        });
-      }
-
-      // Desktop hover
-      if (locked && !popupOpen && !inVR) {
-        raycaster.setFromCamera(center, camera);
-        const hits = raycaster.intersectObjects(clickableMeshes);
-        const ch = document.getElementById('crosshair');
-        if (hits.length>0) {
-          const obj=hits[0].object;
-          if (hoveredMesh!==obj) { if(hoveredMesh) hoveredMesh.material.emissiveIntensity=0.3; hoveredMesh=obj; }
-          hoveredMesh.material.emissiveIntensity = 0.8+Math.sin(t*4)*0.2;
-          tooltip.textContent=obj.userData.title+' — click to inspect';
-          tooltip.classList.add('visible'); ch.classList.add('hover');
         } else {
-          if(hoveredMesh){hoveredMesh.material.emissiveIntensity=0.3;hoveredMesh=null;}
-          tooltip.classList.remove('visible'); ch.classList.remove('hover');
+          // Desktop: HTML popup
+          popupTitle.textContent = title;
+          popupBody.textContent  = body;
+          popup.style.borderColor = color;
+          popup.classList.add('visible');
         }
-      }
-
-      // Animate cubes
-      cubes.forEach(({mesh,baseY,phase}) => {
-        mesh.rotation.y+=0.01; mesh.rotation.x+=0.005;
-        mesh.position.y = baseY+Math.sin(t+phase)*0.1;
       });
+    });
 
-      // Animate orbs
-      (scene.userData.orbs||[]).forEach(orb => {
-        orb.position.y = orb.userData.baseY+Math.sin(t*1.2+orb.userData.phase)*0.2;
-        orb.userData.light.position.copy(orb.position);
-        orb.userData.light.intensity = 2+Math.sin(t*2+orb.userData.phase)*0.5;
-      });
-
-      renderer.render(scene, camera);
+    document.getElementById('popup-close').addEventListener('click', () => {
+      popup.classList.remove('visible');
     });
   </script>
+
 </body>
 </html>
