@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VR Explorer — Oculus</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: system-ui, sans-serif; }
+    canvas { display: block; }
+
+    /* ── Desktop fallback UI ── */
+    #crosshair {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 16px; height: 16px;
+      pointer-events: none; opacity: 0.7;
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute;
+      background: rgba(255,255,255,0.8); border-radius: 2px;
+    }
+    #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+    #crosshair::after  { width: 100%; height: 2px; top: 50%; transform: translateY(-50%); }
+    #crosshair.hover::before,
+    #crosshair.hover::after { background: #3ecfcf; }
+
+    #overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      transition: opacity 0.4s; z-index: 10;
+    }
+    #overlay.hidden { opacity: 0; pointer-events: none; }
+    #overlay h1 { font-size: 26px; font-weight: 600; color: #fff; }
+    #overlay p  { font-size: 13px; color: rgba(255,255,255,0.45); text-align: center; line-height: 1.8; max-width: 340px; }
+
+    .btn {
+      padding: 12px 36px; border-radius: 999px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+    }
+    #enter-desktop { background: rgba(255,255,255,0.12); color: #fff; }
+    #enter-desktop:hover { opacity: 0.75; }
+    #enter-vr {
+      background: linear-gradient(135deg, #6c47ff, #3ecfcf); color: #fff;
+      display: none; /* shown only when VR is supported */
+    }
+    #enter-vr:hover { opacity: 0.85; }
+    #vr-status { font-size: 12px; color: rgba(255,255,255,0.3); }
+
+    #controls-hint {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; gap: 10px;
+      pointer-events: none; opacity: 0; transition: opacity 0.5s;
+    }
+    #controls-hint.visible { opacity: 1; }
+    .key {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 11px; color: rgba(255,255,255,0.5);
+    }
+
+    #tooltip {
+      position: fixed; top: calc(50% + 20px); left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; padding: 5px 14px;
+      font-size: 12px; color: rgba(255,255,255,0.8);
+      pointer-events: none; opacity: 0; transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    #tooltip.visible { opacity: 1; }
+
+    #popup {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.92);
+      background: rgba(10,6,20,0.96);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 16px; padding: 26px 34px;
+      text-align: center; color: #fff;
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 20; max-width: 300px;
+    }
+    #popup.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+    #popup h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    #popup p  { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; margin-bottom: 16px; }
+    #popup-close {
+      padding: 7px 22px; border-radius: 999px; border: none;
+      background: rgba(255,255,255,0.1); color: #fff; font-size: 13px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    #popup-close:hover { background: rgba(255,255,255,0.2); }
+
+    #esc-hint {
+      position: fixed; top: 16px; right: 20px;
+      font-size: 12px; color: rgba(255,255,255,0.25);
+      pointer-events: none; opacity: 0; transition: opacity 0.5s;
+    }
+    #esc-hint.visible { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- Entry overlay — shown to both desktop and Oculus browser users -->
+  <div id="overlay">
+    <h1>VR Explorer</h1>
+    <p id="overlay-desc">
+      On Oculus: open in the Quest browser over HTTPS and tap <strong style="color:#fff">Enter VR</strong>.<br>
+      On desktop: use WASD + mouse to explore.
+    </p>
+
+    <!-- VR button (only shown when immersive-vr is supported) -->
+    <button id="enter-vr" class="btn">🥽 Enter VR</button>
+
+    <!-- Desktop fallback -->
+    <button id="enter-desktop" class="btn">Enter (Desktop)</button>
+
+    <p id="vr-status">Checking VR support…</p>
+  </div>
+
+  <div id="crosshair"></div>
+
+  <div id="controls-hint">
+    <span class="key">W/↑ Forward</span>
+    <span class="key">S/↓ Back</span>
+    <span class="key">A/← Left</span>
+    <span class="key">D/→ Right</span>
+    <span class="key">Mouse look</span>
+    <span class="key">Click interact</span>
+  </div>
+
+  <div id="esc-hint">ESC to release mouse</div>
+  <div id="tooltip"></div>
+
+  <div id="popup">
+    <h2 id="popup-title"></h2>
+    <p id="popup-body"></p>
+    <button id="popup-close">Close</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+    // ─── Renderer ─────────────────────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.9;
+    // Critical for WebXR
+    renderer.xr.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // ─── Scene ────────────────────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0614);
+    scene.fog = new THREE.FogExp2(0x0a0614, 0.06);
+
+    // ─── Camera ───────────────────────────────────────────────────────────────
+    // In VR mode Three.js takes over the camera completely (head tracking).
+    // In desktop mode we drive it via yaw/pitch objects as before.
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 100);
+
+    const yawObject   = new THREE.Object3D();
+    const pitchObject = new THREE.Object3D();
+    yawObject.position.set(0, 1.7, 0);
+    yawObject.add(pitchObject);
+    pitchObject.add(camera);
+    scene.add(yawObject);
+
+    // ─── Lighting ─────────────────────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0x1a0a2e, 3));
+    const moonLight = new THREE.DirectionalLight(0x7090ff, 0.6);
+    moonLight.position.set(10, 20, 10);
+    moonLight.castShadow = true;
+    moonLight.shadow.mapSize.set(2048, 2048);
+    moonLight.shadow.camera.left = moonLight.shadow.camera.bottom = -25;
+    moonLight.shadow.camera.right = moonLight.shadow.camera.top = 25;
+    moonLight.shadow.camera.far = 60;
+    scene.add(moonLight);
+
+    // ─── Glowing orbs ─────────────────────────────────────────────────────────
+    const orbColors = [0x6c47ff, 0x3ecfcf, 0xff4785, 0xffb347];
+    const orbPositions = [
+      [-4,1.5,-6],[5,2,-8],[-7,1,-3],[3,1.8,-4],
+      [0,2.5,-10],[-2,1.2,-12],[8,1.5,-7],[-5,2,-14],[2,1,-16]
+    ];
+    orbPositions.forEach(([x,y,z], i) => {
+      const color = orbColors[i % orbColors.length];
+      const light = new THREE.PointLight(color, 2.5, 6);
+      light.position.set(x, y, z);
+      scene.add(light);
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 16, 16),
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2, roughness: 0 })
+      );
+      orb.position.set(x, y, z);
+      orb.userData = { light, baseY: y, phase: Math.random() * Math.PI * 2 };
+      scene.add(orb);
+      scene.userData.orbs = scene.userData.orbs || [];
+      scene.userData.orbs.push(orb);
+    });
+
+    // ─── Floor ────────────────────────────────────────────────────────────────
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 60),
+      new THREE.MeshStandardMaterial({ color: 0x0d0820, roughness: 0.9 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    const grid = new THREE.GridHelper(60, 40, 0x2a1a4a, 0x1a0a2e);
+    grid.position.y = 0.001;
+    scene.add(grid);
+
+    // ─── Pillars ──────────────────────────────────────────────────────────────
+    function makePillar(x, z) {
+      const g = new THREE.Group();
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.18, 4, 8),
+        new THREE.MeshStandardMaterial({ color: 0x1a0a3a, roughness: 0.6, metalness: 0.4 })
+      );
+      shaft.position.y = 2; shaft.castShadow = true;
+      g.add(shaft);
+      const cap = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.2, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x2a1a5a, roughness: 0.4, metalness: 0.6 })
+      );
+      cap.position.y = 4.1;
+      g.add(cap);
+      g.position.set(x, 0, z);
+      scene.add(g);
+    }
+    [-3, 3].forEach(x => { for (let z = -4; z >= -22; z -= 4) makePillar(x, z); });
+
+    // ─── Clickable cubes ──────────────────────────────────────────────────────
+    const cubes = [];
+    const clickableMeshes = [];
+
+    const cubeData = [
+      { pos:[0,1.5,-6],    color:0x6c47ff, size:0.4,  title:'The Purple Gate',    body:'Ancient energies swirl within. This cube has guarded the corridor entrance since the beginning of time.' },
+      { pos:[-2,2.2,-10],  color:0x3ecfcf, size:0.3,  title:'The Teal Fragment',  body:'A shard of a shattered world. If you listen closely, you can hear the ocean inside it.' },
+      { pos:[2.5,1.8,-8],  color:0xff4785, size:0.25, title:'The Pink Ember',     body:'Warm to the touch, even through the void. Rumored to be the last light of a dead star.' },
+      { pos:[0,3,-14],     color:0xffb347, size:0.5,  title:'The Golden Monolith',body:'The largest of the relics. No one knows who placed it here, or why it hums at exactly 432Hz.' },
+    ];
+
+    cubeData.forEach(({ pos, color, size, title, body }) => {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(size, size, size),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.8, emissive: color, emissiveIntensity: 0.3 })
+      );
+      mesh.position.set(...pos);
+      mesh.castShadow = true;
+      mesh.userData = { clickable: true, title, body };
+      const wire = new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size)),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 })
+      );
+      mesh.add(wire);
+      scene.add(mesh);
+      cubes.push({ mesh, baseY: pos[1], phase: Math.random() * Math.PI * 2 });
+      clickableMeshes.push(mesh);
+    });
+
+    // ─── Stars ────────────────────────────────────────────────────────────────
+    const starPositions = [];
+    for (let i = 0; i < 2000; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.acos(2 * Math.random() - 1);
+      const r     = 40 + Math.random() * 20;
+      starPositions.push(r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta));
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, sizeAttenuation: true })));
+
+    // ─── 3D floating label (used in VR — HTML overlays don't render in headset) ─
+    // We draw text onto a canvas and use it as a texture on a plane in world space.
+    function make3DLabel(text, color) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512; canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(10,6,20,0.85)';
+      ctx.roundRect(4, 4, 504, 120, 16);
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.roundRect(4, 4, 504, 120, 16);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 40px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 256, 64);
+      const tex = new THREE.CanvasTexture(canvas);
+      const plane = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.8, 0.2),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
+      );
+      plane.visible = false;
+      return plane;
+    }
+
+    // Attach a 3D label above each cube (shown on hover in VR)
+    cubeData.forEach(({ color, title }, i) => {
+      const hex = '#' + new THREE.Color(color).getHexString();
+      const label = make3DLabel(title, hex);
+      label.position.set(0, cubeData[i].size / 2 + 0.22, 0);
+      cubes[i].mesh.add(label);
+      cubes[i].label = label;
+    });
+
+    // ─── Controller laser pointer (VR) ────────────────────────────────────────
+    // A thin line extending from each controller to show where you're pointing.
+    const laserMat = new THREE.LineBasicMaterial({ color: 0x3ecfcf, transparent: true, opacity: 0.6 });
+    const laserGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-4)
+    ]);
+    const lasers = [0, 1].map(() => {
+      const laser = new THREE.Line(laserGeo, laserMat);
+      laser.visible = false;
+      scene.add(laser);
+      return laser;
+    });
+
+    // ─── Raycaster (shared between desktop & VR) ──────────────────────────────
+    const raycaster = new THREE.Raycaster();
+    const center    = new THREE.Vector2(0, 0);
+    const tooltip   = document.getElementById('tooltip');
+    const popup     = document.getElementById('popup');
+    const popupTitle = document.getElementById('popup-title');
+    const popupBody  = document.getElementById('popup-body');
+    const crosshair  = document.getElementById('crosshair');
+    let hoveredMesh = null;
+    let popupOpen   = false;
+    let inVR        = false;
+
+    // ─── VR session management ────────────────────────────────────────────────
+    const vrStatus  = document.getElementById('vr-status');
+    const enterVrBtn = document.getElementById('enter-vr');
+
+    renderer.xr.addEventListener('sessionstart', () => {
+      inVR = true;
+      // In VR the yaw/pitch rig is irrelevant — XR takes over.
+      // Move the XR camera group to ground level.
+      renderer.xr.getCamera(camera);
+    });
+    renderer.xr.addEventListener('sessionend', () => { inVR = false; });
+
+    // Check VR support on load
+    if (navigator.xr) {
+      navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+        if (supported) {
+          enterVrBtn.style.display = 'block';
+          vrStatus.textContent = '✓ Immersive VR supported on this device';
+        } else {
+          vrStatus.textContent = 'VR not supported in this browser/device';
+        }
+      });
+    } else {
+      vrStatus.textContent = 'WebXR not available';
+    }
+
+    enterVrBtn.addEventListener('click', async () => {
+      const session = await navigator.xr.requestSession('immersive-vr', {
+        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
+      });
+      await renderer.xr.setSession(session);
+      document.getElementById('overlay').classList.add('hidden');
+
+      // Listen for controller select (trigger press) to interact
+      session.addEventListener('selectstart', onXRSelect);
+    });
+
+    // XR controller select = trigger pressed
+    function onXRSelect(e) {
+      const source = e.inputSource;
+      if (!source.gripSpace) return;
+      // Cast ray from the controller
+      const frame = renderer.xr.getFrame ? renderer.xr.getFrame() : null;
+      // Use the laser direction already computed in the loop
+      const controllerObj = renderer.xr.getController(source.handedness === 'right' ? 0 : 1);
+      if (!controllerObj) return;
+      const tempRay = new THREE.Raycaster();
+      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(controllerObj.quaternion);
+      tempRay.set(controllerObj.position, dir);
+      const hits = tempRay.intersectObjects(clickableMeshes);
+      if (hits.length > 0) {
+        const obj = hits[0].object;
+        // In VR show a 3D label instead of HTML popup
+        cubes.forEach(c => { c.label.visible = false; });
+        const hit = cubes.find(c => c.mesh === obj);
+        if (hit) hit.label.visible = true;
+      }
+    }
+
+    // ─── Desktop: pointer lock + WASD ─────────────────────────────────────────
+    let locked = false;
+    let yaw = 0, pitch = 0;
+
+    document.addEventListener('pointerlockchange', () => {
+      locked = document.pointerLockElement === renderer.domElement;
+      document.getElementById('controls-hint').classList.toggle('visible', locked);
+      document.getElementById('esc-hint').classList.toggle('visible', locked);
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!locked || inVR) return;
+      yaw   -= e.movementX * 0.002;
+      pitch -= e.movementY * 0.002;
+      pitch  = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, pitch));
+      yawObject.rotation.y   = yaw;
+      pitchObject.rotation.x = pitch;
+    });
+
+    document.getElementById('enter-desktop').addEventListener('click', () => {
+      renderer.domElement.requestPointerLock();
+      document.getElementById('overlay').classList.add('hidden');
+    });
+
+    renderer.domElement.addEventListener('click', () => {
+      if (inVR) return;
+      if (!locked) { renderer.domElement.requestPointerLock(); return; }
+      if (popupOpen) return;
+      raycaster.setFromCamera(center, camera);
+      const hits = raycaster.intersectObjects(clickableMeshes);
+      if (hits.length > 0) {
+        const obj = hits[0].object;
+        popupTitle.textContent = obj.userData.title;
+        popupBody.textContent  = obj.userData.body;
+        popup.style.borderColor = '#' + new THREE.Color(obj.material.color).getHexString();
+        popup.classList.add('visible');
+        popupOpen = true;
+        document.exitPointerLock();
+      }
+    });
+
+    document.getElementById('popup-close').addEventListener('click', () => {
+      popup.classList.remove('visible');
+      popupOpen = false;
+      renderer.domElement.requestPointerLock();
+    });
+
+    const keys = {};
+    window.addEventListener('keydown', e => { keys[e.code] = true; });
+    window.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+    const moveDir  = new THREE.Vector3();
+    const frontVec = new THREE.Vector3();
+    const rightVec = new THREE.Vector3();
+    const SPEED = 0.06;
+
+    function processDesktopMovement() {
+      if (inVR) return; // locomotion in VR handled separately (or left to physical movement)
+      moveDir.set(0, 0, 0);
+      frontVec.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+      rightVec.set(Math.cos(yaw), 0, -Math.sin(yaw));
+      if (keys['KeyW'] || keys['ArrowUp'])    moveDir.addScaledVector(frontVec,  SPEED);
+      if (keys['KeyS'] || keys['ArrowDown'])  moveDir.addScaledVector(frontVec, -SPEED);
+      if (keys['KeyA'] || keys['ArrowLeft'])  moveDir.addScaledVector(rightVec, -SPEED);
+      if (keys['KeyD'] || keys['ArrowRight']) moveDir.addScaledVector(rightVec,  SPEED);
+      yawObject.position.add(moveDir);
+      yawObject.position.y = 1.7;
+      yawObject.position.x = Math.max(-12, Math.min(12, yawObject.position.x));
+      yawObject.position.z = Math.max(-24, Math.min(4,  yawObject.position.z));
+    }
+
+    // ─── VR controller laser update ────────────────────────────────────────────
+    function updateControllerLasers() {
+      if (!inVR) { lasers.forEach(l => l.visible = false); return; }
+      [0, 1].forEach(i => {
+        const ctrl = renderer.xr.getController(i);
+        if (ctrl && ctrl.visible) {
+          lasers[i].position.copy(ctrl.position);
+          lasers[i].quaternion.copy(ctrl.quaternion);
+          lasers[i].visible = true;
+        } else {
+          lasers[i].visible = false;
+        }
+      });
+    }
+
+    // ─── Resize ───────────────────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ─── Animation loop ───────────────────────────────────────────────────────
+    const clock = new THREE.Clock();
+
+    renderer.setAnimationLoop(() => {
+      const t = clock.getElapsedTime();
+
+      processDesktopMovement();
+      updateControllerLasers();
+
+      // Desktop hover detection
+      if (locked && !popupOpen && !inVR) {
+        raycaster.setFromCamera(center, camera);
+        const hits = raycaster.intersectObjects(clickableMeshes);
+        if (hits.length > 0) {
+          const obj = hits[0].object;
+          if (hoveredMesh !== obj) {
+            if (hoveredMesh) hoveredMesh.material.emissiveIntensity = 0.3;
+            hoveredMesh = obj;
+          }
+          hoveredMesh.material.emissiveIntensity = 0.8 + Math.sin(t * 4) * 0.2;
+          tooltip.textContent = obj.userData.title + ' — click to inspect';
+          tooltip.classList.add('visible');
+          crosshair.classList.add('hover');
+        } else {
+          if (hoveredMesh) { hoveredMesh.material.emissiveIntensity = 0.3; hoveredMesh = null; }
+          tooltip.classList.remove('visible');
+          crosshair.classList.remove('hover');
+        }
+      }
+
+      // Animate cubes
+      cubes.forEach(({ mesh, baseY, phase }) => {
+        mesh.rotation.y += 0.01;
+        mesh.rotation.x += 0.005;
+        mesh.position.y = baseY + Math.sin(t + phase) * 0.1;
+      });
+
+      // Animate orbs
+      (scene.userData.orbs || []).forEach(orb => {
+        orb.position.y = orb.userData.baseY + Math.sin(t * 1.2 + orb.userData.phase) * 0.2;
+        orb.userData.light.position.copy(orb.position);
+        orb.userData.light.intensity = 2 + Math.sin(t * 2 + orb.userData.phase) * 0.5;
+      });
+
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
