@@ -86,9 +86,9 @@
         </a-cursor>
       </a-camera>
 
-      <!-- Left controller: blink-controls for teleport
-           Push thumbstick forward → arc appears
-           Release → teleport                               -->
+      <!-- Left controller: teleport
+           Push thumbstick forward → arc appears, release → jump
+           Thumbstick left/right → snap turn                      -->
       <a-entity id="left-hand"
         oculus-touch-controls="hand: left"
         blink-controls="
@@ -98,12 +98,22 @@
           curveHitColor: #3ecfcf;
           curveMissColor: #ff4444;
           curveShootingSpeed: 10;
-          snapTurn: false">
+          snapTurn: true;
+          snapTurnDegrees: 45">
       </a-entity>
 
-      <!-- Right controller: laser pointer for cube interaction -->
+      <!-- Right controller: laser pointer for cube interaction
+           Also has blink-controls so its thumbstick can snap-turn -->
       <a-entity id="right-hand"
         oculus-touch-controls="hand: right"
+        blink-controls="
+          cameraRig: #player;
+          teleportOrigin: #head;
+          collisionEntities: #floor;
+          snapTurn: true;
+          snapTurnDegrees: 45;
+          startEvents: NEVER;
+          endEvents: NEVER"
         laser-controls="hand: right"
         raycaster="objects: .clickable; far: 20; showLine: true; lineColor: white; lineOpacity: 0.5">
       </a-entity>
